@@ -4,52 +4,37 @@ import Layout from "../layouts/Layout.astro";
 
 <Layout title="Explorador">
 	<div class="content-wrapper">
-		<!-- Sidebar -->
-		<aside class="sidebar">
-			<div class="sidebar-section">
-				<p class="section-title">Navegación</p>
-				<button class="sidebar-item active" id="btn-home" onclick="loadFolder('/')">
-					<span class="icon">🏠</span> Inicio
-				</button>
-			</div>
-			
-			<div class="sidebar-section">
-				<p class="section-title">Acciones</p>
-				<button class="action-card" onclick="triggerFileSelect()">
-					<div class="icon">📤</div>
-					<div>
-						<p class="title">Subir Archivos</p>
-						<p class="desc">Arrastra o selecciona</p>
-					</div>
-				</button>
-				<button class="action-card" onclick="showCreateModal()">
-					<div class="icon">📁</div>
-					<div>
-						<p class="title">Nueva Carpeta</p>
-						<p class="desc">Crear subdirectorio</p>
-					</div>
-				</button>
-			</div>
-
-			<div id="upload-queue-container" class="upload-sidebar-section" style="display:none">
-				<div class="section-header">
-					<p class="section-title">Subidas en curso</p>
-					<span id="queue-count" class="badge">0</span>
-				</div>
-				<div id="upload-items-list" class="upload-list"></div>
-			</div>
-		</aside>
-
 		<!-- Main Area -->
 		<section class="main-area">
+			<!-- Toolbar (Windows style) -->
+			<div class="toolbar">
+				<div class="toolbar-group">
+					<button class="tool-btn" onclick="triggerFileSelect()" title="Subir Archivos (Click o Arrastra)">
+						<span class="icon">📁</span>
+						<span>Subir</span>
+					</button>
+					<button class="tool-btn" onclick="showCreateModal()" title="Nueva Carpeta">
+						<span class="icon">➕</span>
+						<span>Nueva Carpeta</span>
+					</button>
+				</div>
+				<div class="toolbar-divider"></div>
+				<div class="toolbar-group">
+					<button class="tool-btn icon-only" onclick="loadFolder()" title="Refrescar"><span>🔄</span></button>
+					<button class="tool-btn icon-only" id="move-btn" disabled title="Mover selección"><span>📦</span></button>
+					<button class="tool-btn icon-only" id="delete-btn" disabled onclick="deleteSelection()" title="Eliminar selección"><span>🗑️</span></button>
+				</div>
+				<div style="flex:1"></div>
+				<div class="search-box-v2">
+					<span class="icon">🔍</span>
+					<input type="text" id="fileSearch" placeholder="Buscar..." />
+				</div>
+			</div>
+
 			<header class="view-header">
 				<nav class="breadcrumb-nav" id="breadcrumb"></nav>
-				<div class="view-controls">
-					<div class="search-box">
-						<span class="icon">🔍</span>
-						<input type="text" id="fileSearch" placeholder="Buscar en esta carpeta..." />
-					</div>
-					<button class="icon-btn" onclick="loadFolder()" title="Refrescar">🔄</button>
+				<div class="view-stats" id="view-stats">
+					<span id="file-count">0 items</span>
 				</div>
 			</header>
 
@@ -57,15 +42,26 @@ import Layout from "../layouts/Layout.astro";
 				<div class="drop-overlay">
 					<div class="drop-info">
 						<div class="icon">📥</div>
-						<p>Suelta los archivos para subirlos</p>
+						<p>Suelta los archivos aquí</p>
 					</div>
 				</div>
 				<main class="file-view" id="fileGrid">
 					<div class="loading-state">
 						<div class="spinner"></div>
-						<p>Sincronizando con Nexus...</p>
+						<p>Iniciando Nexus...</p>
 					</div>
 				</main>
+			</div>
+
+			<!-- Dashboard de Subidas (Minimizable) -->
+			<div id="upload-status-bar" class="upload-status-bar" style="display:none">
+				<div class="status-header" onclick="toggleUploadList()">
+					<span class="icon">☁️</span>
+					<span id="status-text">Subiendo 0 archivos...</span>
+					<span id="queue-count-v2" class="badge">0</span>
+					<span class="toggle-icon">▼</span>
+				</div>
+				<div id="upload-items-list-v2" class="upload-items-compact"></div>
 			</div>
 		</section>
 	</div>
@@ -82,7 +78,6 @@ import Layout from "../layouts/Layout.astro";
 		</div>
 	</div>
 
-	<style>
 		.content-wrapper {
 			display: flex;
 			flex: 1;
@@ -90,267 +85,164 @@ import Layout from "../layouts/Layout.astro";
 			overflow: hidden;
 		}
 
-		/* Sidebar Styles */
-		.sidebar {
-			width: var(--sidebar-width);
-			background: var(--surface);
-			border-right: 1px solid var(--border);
-			padding: 1.5rem;
-			display: flex;
-			flex-direction: column;
-			gap: 2rem;
-			overflow-y: auto;
-		}
-
-		.sidebar-section { display: flex; flex-direction: column; gap: 0.5rem; }
-		.section-title { 
-			font-size: 0.75rem; 
-			font-weight: 700; 
-			text-transform: uppercase; 
-			color: var(--text-muted);
-			letter-spacing: 0.05em;
-			margin: 0 0 0.5rem 0.5rem;
-		}
-
-		.sidebar-item {
-			width: 100%;
-			padding: 0.75rem 1rem;
-			border: none;
-			background: transparent;
-			border-radius: var(--radius);
-			color: var(--text-secondary);
-			font-size: 0.9rem;
-			font-weight: 500;
-			display: flex;
-			align-items: center;
-			gap: 0.75rem;
-			cursor: pointer;
-			text-align: left;
-			transition: var(--transition);
-		}
-
-		.sidebar-item:hover, .sidebar-item.active {
-			background: var(--bg);
-			color: var(--text);
-			box-shadow: var(--shadow-sm);
-		}
-
-		.action-card {
-			width: 100%;
-			padding: 1rem;
-			border: 1px dashed var(--border);
-			background: var(--bg);
-			border-radius: var(--radius);
-			display: flex;
-			align-items: center;
-			gap: 1rem;
-			cursor: pointer;
-			text-align: left;
-			transition: var(--transition);
-		}
-
-		.action-card:hover {
-			border-color: var(--primary);
-			background: var(--surface);
-			transform: scale(1.02);
-		}
-
-		.action-card .icon {
-			font-size: 1.5rem;
-			background: var(--surface-2);
-			width: 44px;
-			height: 44px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			border-radius: 10px;
-			transition: var(--transition);
-		}
-
-		.action-card:hover .icon {
-			background: var(--primary);
-			color: white;
-		}
-
-		.action-card .title { font-weight: 600; font-size: 0.9rem; margin: 0; color: var(--text); }
-		.action-card .desc { font-size: 0.75rem; color: var(--text-muted); margin: 0; }
-		
-		.action-card[onclick*="triggerFileSelect"] .icon { color: var(--primary); }
-		.action-card[onclick*="showCreateModal"] .icon { color: var(--accent-2); }
-
-		/* Main Area Styles */
-		.main-area {
-			flex: 1;
-			display: flex;
-			flex-direction: column;
-			background: var(--bg);
-			position: relative;
-		}
-
-		.view-header {
-			padding: 1rem 2rem;
+		/* Toolbar (Windows style) */
+		.toolbar {
+			padding: 0.5rem 2rem;
+			background: rgba(var(--bg-rgb), 0.7);
 			border-bottom: 1px solid var(--border);
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
-			gap: 1rem;
-			flex-wrap: wrap;
+			gap: 0.5rem;
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+			z-index: 10;
 		}
 
-		.breadcrumb-nav { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
-		.breadcrumb-item { 
-			color: var(--text-secondary); 
-			cursor: pointer; 
-			transition: var(--transition);
-		}
-		.breadcrumb-item:hover { color: var(--text); font-weight: 500; }
-		.breadcrumb-separator { color: var(--text-muted); opacity: 0.5; }
-		.breadcrumb-current { font-weight: 600; color: var(--text); }
+		.toolbar-group { display: flex; align-items: center; gap: 0.25rem; }
+		.toolbar-divider { width: 1px; height: 1.5rem; background: var(--border); margin: 0 0.5rem; }
 
-		.view-controls { display: flex; align-items: center; gap: 0.75rem; }
-		.search-box {
-			background: var(--surface);
-			border: 1px solid var(--border);
-			border-radius: 50px;
-			padding: 0.4rem 1rem;
+		.tool-btn {
+			padding: 0.4rem 0.75rem;
+			border: 1px solid transparent;
+			background: transparent;
+			border-radius: 6px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-weight: 500;
 			display: flex;
 			align-items: center;
 			gap: 0.5rem;
-			width: 260px;
-		}
-
-		.search-box input {
-			border: none;
-			background: transparent;
-			outline: none;
-			font-size: 0.85rem;
-			width: 100%;
-			color: var(--text);
-		}
-
-		.icon-btn {
-			width: 36px;
-			height: 36px;
-			border-radius: 50%;
-			border: 1px solid var(--border);
-			background: var(--bg);
-			display: flex;
-			align-items: center;
-			justify-content: center;
 			cursor: pointer;
 			transition: var(--transition);
 		}
-		.icon-btn:hover { background: var(--surface); border-color: var(--text); }
 
-		/* Drop Zone & Grid */
-		.drop-zone { flex: 1; position: relative; overflow-y: auto; }
-		.drop-overlay {
-			position: absolute;
-			inset: 0.5rem;
-			background: rgba(var(--bg-rgb), 0.9);
-			border: 2px dashed var(--text);
-			border-radius: var(--radius);
-			z-index: 10;
-			display: none;
-			align-items: center;
-			justify-content: center;
-			pointer-events: none;
+		.tool-btn:hover:not(:disabled) {
+			background: var(--surface-2);
+			border-color: var(--border);
 		}
-		.drop-zone.dragging .drop-overlay { display: flex; }
-		.drop-info { text-align: center; }
-		.drop-info .icon { font-size: 3rem; margin-bottom: 1rem; }
-		.drop-info p { font-weight: 600; font-size: 1.2rem; }
 
+		.tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+		.tool-btn.icon-only { padding: 0.4rem; justify-content: center; }
+		.tool-btn .icon { font-size: 1.1rem; }
+
+		.search-box-v2 {
+			background: var(--bg);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 0.3rem 0.75rem;
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			width: 240px;
+			transition: var(--transition);
+		}
+		.search-box-v2:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1); }
+		.search-box-v2 input { border: none; background: transparent; outline: none; font-size: 0.85rem; width: 100%; color: var(--text); }
+
+		/* Main Sidebar is gone, context is now full */
+		.main-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+
+		.view-header {
+			padding: 1rem 2rem;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			background: var(--bg);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.breadcrumb-nav { display: flex; align-items: center; gap: 0.25rem; font-size: 0.85rem; color: var(--text-secondary); }
+		.breadcrumb-item { cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 4px; transition: var(--transition); }
+		.breadcrumb-item:hover { background: var(--surface-2); color: var(--text); }
+		.breadcrumb-current { font-weight: 600; color: var(--text); padding: 0.2rem 0.4rem; }
+
+		.view-stats { font-size: 0.75rem; color: var(--text-muted); }
+
+		/* File Grid & Selection */
+		.drop-zone { flex: 1; position: relative; overflow-y: auto; }
 		.file-view {
 			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-			gap: 1.5rem;
-			padding: 2rem;
+			grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+			gap: 0.5rem;
+			padding: 1rem 2rem;
 		}
 
 		.file-card {
-			padding: 1.25rem;
-			background: var(--bg);
-			border: 1px solid var(--border);
-			border-radius: var(--radius);
+			padding: 1rem;
+			border: 1px solid transparent;
+			border-radius: 8px;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: 0.75rem;
+			gap: 0.5rem;
 			cursor: pointer;
-			transition: var(--transition);
-			position: relative;
+			transition: background 0.1s, border-color 0.1s;
+			user-select: none;
 		}
 
-		.file-card:hover {
-			border-color: var(--primary);
-			box-shadow: var(--shadow-md);
-			transform: translateY(-4px);
-			background: var(--surface);
-		}
+		.file-card:hover { background: rgba(var(--primary-rgb, 0, 122, 255), 0.05); border-color: rgba(var(--primary-rgb, 0, 122, 255), 0.1); }
+		.file-card.selected { background: rgba(var(--primary-rgb, 0, 122, 255), 0.15); border-color: var(--primary); }
 
-		.file-card .icon { 
-			font-size: 2.8rem; 
-			transition: var(--transition);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
-		
-		.file-card:hover .icon {
-			transform: scale(1.1);
-		}
-
+		.file-card .icon { font-size: 3rem; }
 		.file-card .name {
-			font-size: 0.85rem;
-			font-weight: 600;
+			font-size: 0.8rem;
 			text-align: center;
 			width: 100%;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
-			color: var(--text);
 		}
-		.file-card .info { 
-			font-size: 0.72rem; 
-			color: var(--text-muted); 
-			font-weight: 500;
+		.file-card .info { font-size: 0.7rem; color: var(--text-muted); }
+
+		/* Upload Status Bar */
+		.upload-status-bar {
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			background: var(--surface);
+			border-top: 1px solid var(--border);
+			z-index: 100;
+			box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
 		}
 
-		/* Batch Upload SidebarSection */
-		.upload-sidebar-section {
-			background: var(--surface-2);
-			border-radius: var(--radius);
-			padding: 1rem;
-			margin-top: auto;
+		.status-header {
+			padding: 0.75rem 2rem;
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			cursor: pointer;
 		}
-		.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-		.badge {
-			background: var(--text);
-			color: var(--bg);
-			font-size: 0.7rem;
-			font-weight: 700;
-			padding: 0.1rem 0.4rem;
-			border-radius: 4px;
+		.status-header:hover { background: var(--surface-2); }
+		#status-text { flex: 1; font-size: 0.85rem; font-weight: 500; }
+		.toggle-icon { font-size: 0.6rem; transition: transform 0.3s; }
+		.upload-status-bar.expanded .toggle-icon { transform: rotate(180deg); }
+
+		.upload-items-compact {
+			max-height: 0;
+			overflow: hidden;
+			transition: max-height 0.3s ease-out;
+			background: var(--bg);
 		}
-		.upload-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 200px; overflow-y: auto; }
-		.upload-item { background: var(--bg); padding: 0.6rem; border-radius: 8px; font-size: 0.75rem; border: 1px solid var(--border); }
-		.upload-item-name { 
-			white-space: nowrap; 
-			overflow: hidden; 
-			text-overflow: ellipsis; 
-			margin-bottom: 0.4rem; 
-			font-weight: 500;
+		.upload-status-bar.expanded .upload-items-compact { max-height: 300px; overflow-y: auto; padding-bottom: 1rem; }
+
+		.upload-item-compact {
+			padding: 0.5rem 2rem;
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			border-bottom: 1px solid var(--border);
 		}
-		.progress-mini { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
-		.progress-fill-mini { height: 100%; background: var(--text); transition: width 0.3s ease; }
+		.upload-item-compact .name { flex: 1; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.progress-bar-v2 { width: 100px; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+		.progress-fill-v2 { height: 100%; background: var(--primary); transition: width 0.3s; }
 
 		.loading-state { grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted); }
 		.spinner {
-			width: 40px;
-			height: 40px;
+			width: 32px;
+			height: 32px;
 			border: 3px solid var(--border);
-			border-top-color: var(--text);
+			border-top-color: var(--primary);
 			border-radius: 50%;
 			animation: spin 1s linear infinite;
 			margin: 0 auto 1.5rem;
@@ -359,9 +251,10 @@ import Layout from "../layouts/Layout.astro";
 		@keyframes spin { to { transform: rotate(360deg); } }
 
 		@media (max-width: 768px) {
-			.sidebar { display: none; }
-			.view-header { padding: 1rem; }
-			.file-view { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 1rem; padding: 1rem; }
+			.toolbar { padding: 0.5rem 1rem; overflow-x: auto; }
+			.view-header { padding: 0.75rem 1rem; }
+			.file-view { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); padding: 1rem; }
+			.search-box-v2 { display: none; }
 		}
 	</style>
 
@@ -406,16 +299,18 @@ import Layout from "../layouts/Layout.astro";
 			return d.innerHTML;
 		}
 
-		// ============================================
-		// GESTOR DE SUBIDAS (BATCH UPLOAD)
-		// ============================================
+		const MAX_CONCURRENT_UPLOADS = 15;
+		let selectedPath = null;
+		let clickTimer = null;
+
 		class UploadQueue {
 			constructor() {
 				this.queue = [];
 				this.activeCount = 0;
-				this.container = document.getElementById("upload-queue-container");
-				this.list = document.getElementById("upload-items-list");
-				this.countBadge = document.getElementById("queue-count");
+				this.statusBar = document.getElementById("upload-status-bar");
+				this.list = document.getElementById("upload-items-list-v2");
+				this.countBadge = document.getElementById("queue-count-v2");
+				this.statusLabel = document.getElementById("status-text");
 			}
 
 			add(file) {
@@ -430,39 +325,36 @@ import Layout from "../layouts/Layout.astro";
 			renderItem(item) {
 				const div = document.createElement('div');
 				div.id = item.id;
-				div.className = 'upload-item';
+				div.className = 'upload-item-compact';
 				div.innerHTML = `
-					<div class="upload-item-name" title="${escapeHtml(item.file.name)}">
-						<span style="color:var(--primary); margin-right:4px">⬆️</span>
-						<span>${escapeHtml(item.file.name)}</span>
-					</div>
-					<div class="progress-mini">
-						<div class="progress-fill-mini" style="width: 0%; background: var(--primary)"></div>
+					<span class="icon" style="color:var(--text-muted)">📄</span>
+					<div class="name" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</div>
+					<div class="progress-bar-v2">
+						<div id="fill-${item.id}" class="progress-fill-v2" style="width: 0%"></div>
 					</div>
 				`;
 				this.list.prepend(div);
 			}
 
 			updateUI() {
-				if (this.queue.length > 0) {
-					this.container.style.display = 'block';
-					this.countBadge.textContent = this.queue.length;
+				const count = this.queue.length;
+				if (count > 0) {
+					this.statusBar.style.display = 'block';
+					this.countBadge.textContent = count;
+					this.statusLabel.textContent = `Gestionando ${count} archivo${count > 1 ? 's' : ''}...`;
 				} else {
-					this.container.style.display = 'none';
+					this.statusBar.style.display = 'none';
 				}
 			}
 
 			async process() {
 				if (this.activeCount >= MAX_CONCURRENT_UPLOADS) return;
-				
 				const next = this.queue.find(i => i.status === 'pending');
 				if (!next) return;
 
 				next.status = 'uploading';
 				this.activeCount++;
-				
 				await this.doUpload(next);
-				
 				this.activeCount--;
 				this.process();
 			}
@@ -479,7 +371,7 @@ import Layout from "../layouts/Layout.astro";
 					xhr.upload.onprogress = (e) => {
 						if (e.lengthComputable) {
 							const p = (e.loaded / e.total) * 100;
-							const fill = document.querySelector(`#${item.id} .progress-fill-mini`);
+							const fill = document.getElementById(`fill-${item.id}`);
 							if (fill) fill.style.width = p + "%";
 						}
 					};
@@ -492,7 +384,6 @@ import Layout from "../layouts/Layout.astro";
 							showToast(`✅ "${item.file.name}" subido`);
 							if (this.queue.length === 0) loadFolder();
 						} else {
-							div.style.borderColor = 'var(--error)';
 							showToast(`❌ Error al subir ${item.file.name}`, 'error');
 						}
 						this.updateUI();
@@ -503,7 +394,6 @@ import Layout from "../layouts/Layout.astro";
 						showToast("❌ Error de conexión", "error");
 						resolve();
 					};
-
 					xhr.send(formData);
 				});
 			}
@@ -516,34 +406,27 @@ import Layout from "../layouts/Layout.astro";
 		// ============================================
 		async function loadFolder(path = currentPath) {
 			currentPath = path;
+			selectedPath = null;
+			updateToolbarStates();
 			updateBreadcrumb();
-			updateSidebarActive();
 
 			const grid = document.getElementById("fileGrid");
 			if (!grid) return;
 
-			grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Sincronizando con Nexus...</p></div>';
+			grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Iniciando Nexus...</p></div>';
 
 			try {
 				const encodedPath = encodeURIComponent(currentPath).replace(/%2F/g, "/");
-				const apiUrl = `/api/files${encodedPath === "/" ? "" : encodedPath}`;
-				console.log("[FRONTEND DEBUG] Loading Folder Path:", currentPath);
-				console.log("[FRONTEND DEBUG] Fetching API URL:", apiUrl);
-				
-				const res = await fetch(apiUrl);
-				console.log("[FRONTEND DEBUG] API Status:", res.status);
-				
+				const res = await fetch(`/api/files${encodedPath === "/" ? "" : encodedPath}`);
 				const result = await res.json();
-				console.log("[FRONTEND DEBUG] API Data:", result);
 
 				if (!result.success) throw new Error(result.error || "Error desconocido");
 				
 				allFiles = result.items || [];
-				console.log("[FRONTEND DEBUG] Rendered Files Count:", allFiles.length);
+				document.getElementById("file-count").textContent = `${allFiles.length} item${allFiles.length !== 1 ? 's' : ''}`;
 				renderFiles(allFiles);
 			} catch (err) {
-				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem">❌</div><p>Error: ${err.message}</p><button class="btn" onclick="loadFolder()" style="margin-top:1rem">🔄 Reintentar</button></div>`;
-				showToast("Error al cargar: " + err.message, "error");
+				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:2rem">❌</div><p>${err.message}</p></div>`;
 			}
 		}
 
@@ -552,17 +435,67 @@ import Layout from "../layouts/Layout.astro";
 			if (!grid) return;
 
 			if (files.length === 0) {
-				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem"><span>📂</span></div><p>Esta carpeta está vacía</p></div>`;
+				grid.innerHTML = `<div class="loading-state"><span>📂</span><p>Vacío</p></div>`;
 				return;
 			}
 
 			grid.innerHTML = files.map(f => `
-				<div class="file-card" onclick="${f.isFolder ? `loadFolder('${f.path.replace(/'/g, "\\'")}')` : `openFile('${f.path.replace(/'/g, "\\'")}')`}">
+				<div class="file-card" 
+					 data-path="${f.path}" 
+					 data-folder="${f.isFolder}"
+					 onclick="handleFileClick(event, '${f.path.replace(/'/g, "\\'")}', ${f.isFolder})"
+					 ondblclick="handleFileDblClick('${f.path.replace(/'/g, "\\'")}', ${f.isFolder})">
 					<div class="icon">${getFileIcon(f.name, f.isFolder, f.mime)}</div>
-					<div class="name" title="${escapeHtml(f.name)}"><span>${escapeHtml(f.name)}</span></div>
-					<div class="info"><span>${f.isFolder ? "Carpeta" : formatBytes(f.size)}</span></div>
+					<div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+					<div class="info">${f.isFolder ? "Carpeta" : formatBytes(f.size)}</div>
 				</div>
 			`).join("");
+		}
+
+		function handleFileClick(e, path, isFolder) {
+			// Prevenir navegación inmediata en un solo click
+			e.stopPropagation();
+			
+			// Seleccionar visualmente
+			document.querySelectorAll('.file-card').forEach(c => c.classList.remove('selected'));
+			const card = e.currentTarget;
+			card.classList.add('selected');
+			
+			selectedPath = path;
+			updateToolbarStates();
+		}
+
+		function handleFileDblClick(path, isFolder) {
+			if (isFolder) {
+				loadFolder(path);
+			} else {
+				openFile(path);
+			}
+		}
+
+		function updateToolbarStates() {
+			const hasSelection = selectedPath !== null;
+			document.getElementById("delete-btn").disabled = !hasSelection;
+			document.getElementById("move-btn").disabled = !hasSelection;
+		}
+
+		async function deleteSelection() {
+			if (!selectedPath) return;
+			if (!confirm(`¿Estás seguro de que quieres eliminar este elemento?`)) return;
+
+			try {
+				const res = await fetch("/api/delete", {
+					method: "POST",
+					body: JSON.stringify({ path: selectedPath })
+				});
+				const data = await res.json();
+				if (data.success) {
+					showToast("Elemento eliminado");
+					loadFolder();
+				} else throw new Error(data.error);
+			} catch (err) {
+				showToast("Error al eliminar: " + err.message, "error");
+			}
 		}
 
 		function updateBreadcrumb() {
@@ -596,11 +529,25 @@ import Layout from "../layouts/Layout.astro";
 			window.open(url, "_blank");
 		}
 
+		function toggleUploadList() {
+			const bar = document.getElementById("upload-status-bar");
+			bar.classList.toggle("expanded");
+		}
+
 		// ============================================
 		// EVENTOS Y BÚSQUEDA
 		// ============================================
 		document.addEventListener("DOMContentLoaded", () => {
 			loadFolder();
+
+			// Deseleccionar al hacer click fuera
+			document.addEventListener('click', (e) => {
+				if (!e.target.closest('.file-card') && !e.target.closest('.toolbar')) {
+					selectedPath = null;
+					document.querySelectorAll('.file-card').forEach(c => c.classList.remove('selected'));
+					updateToolbarStates();
+				}
+			});
 
 			// Búsqueda en tiempo real
 			document.getElementById("fileSearch")?.addEventListener("input", (e) => {
@@ -633,6 +580,8 @@ import Layout from "../layouts/Layout.astro";
 				files.forEach(f => uploader.add(f));
 			});
 		});
+
+		window.toggleUploadList = toggleUploadList;
 
 		// Acciones de archivos
 		window.triggerFileSelect = () => document.getElementById("fileInput")?.click();
