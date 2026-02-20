@@ -20,11 +20,22 @@ import {
     Moon,
     Sun,
     Monitor,
-    ArrowLeft
+    ArrowLeft,
+    PlusCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -42,6 +53,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster, toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { UploadDashboard, type UploadTask } from "./UploadDashboard";
 
 interface FileItem {
     name: string;
@@ -59,6 +71,10 @@ export default function FileExplorer() {
     const [selectedPath, setSelectedPath] = React.useState<string | null>(null);
     const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
     const [theme, setThemeState] = React.useState<"light" | "dark">("light");
+    const [uploadTasks, setUploadTasks] = React.useState<UploadTask[]>([]);
+    const [isUploadDashboardOpen, setIsUploadDashboardOpen] = React.useState(false);
+    const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = React.useState(false);
+    const [newFolderName, setNewFolderName] = React.useState("");
 
     React.useEffect(() => {
         const t = localStorage.getItem('theme') as "light" | "dark" ||
@@ -124,18 +140,19 @@ export default function FileExplorer() {
     };
 
     const createFolder = async () => {
-        const name = prompt("Nombre de la carpeta:");
-        if (!name) return;
+        if (!newFolderName) return;
 
         try {
             const res = await fetch("/api/folder", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ folderName: name, parentPath: currentPath })
+                body: JSON.stringify({ folderName: newFolderName, parentPath: currentPath })
             });
             const data = await res.json();
             if (data.success) {
-                toast.success(`Carpeta "${name}" creada`);
+                toast.success(`Carpeta "${newFolderName}" creada`);
+                setIsNewFolderDialogOpen(false);
+                setNewFolderName("");
                 loadFolder(currentPath);
             } else throw new Error(data.error);
         } catch (err: any) {
@@ -169,22 +186,75 @@ export default function FileExplorer() {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
-        toast.promise(
-            Promise.all(files.map(file => {
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("folderPath", currentPath);
-                return fetch("/api/upload", { method: "POST", body: formData }).then(r => r.json());
-            })),
-            {
-                loading: `Subiendo ${files.length} archivo(s)...`,
-                success: (data) => {
+        setIsUploadDashboardOpen(true);
+        const newTasks: UploadTask[] = files.map(file => ({
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            size: file.size,
+            progress: 0,
+            status: "pending"
+        }));
+
+        setUploadTasks(prev => [...prev, ...newTasks]);
+
+        // Sequential or limited parallel processing could be here, but for now parallel
+        newTasks.forEach((task, index) => {
+            const file = files[index];
+            const xhr = new XMLHttpRequest();
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("folderPath", currentPath);
+
+            let startTime = Date.now();
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percent = (event.loaded / event.total) * 100;
+                    const duration = (Date.now() - startTime) / 1000;
+                    const speedRaw = event.loaded / duration; // bytes per second
+
+                    let speed = "";
+                    if (speedRaw > 1024 * 1024) speed = (speedRaw / (1024 * 1024)).toFixed(1) + " MB/s";
+                    else if (speedRaw > 1024) speed = (speedRaw / 1024).toFixed(1) + " KB/s";
+                    else speed = speedRaw.toFixed(0) + " B/s";
+
+                    const remainingBytes = event.total - event.loaded;
+                    const secondsRemaining = remainingBytes / speedRaw;
+                    let eta = "";
+                    if (secondsRemaining > 60) eta = Math.floor(secondsRemaining / 60) + "m " + Math.round(secondsRemaining % 60) + "s";
+                    else eta = Math.round(secondsRemaining) + "s";
+
+                    setUploadTasks(prev => prev.map(t =>
+                        t.id === task.id ? { ...t, progress: percent, status: "uploading", speed, eta } : t
+                    ));
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    setUploadTasks(prev => prev.map(t =>
+                        t.id === task.id ? { ...t, progress: 100, status: "completed" } : t
+                    ));
+                    // Optimistic/Immediate refresh
                     loadFolder(currentPath);
-                    return "Subida completada";
-                },
-                error: (err) => `Error al subir: ${err.message || "Error desconocido"}`
-            }
-        );
+                } else {
+                    setUploadTasks(prev => prev.map(t =>
+                        t.id === task.id ? { ...t, status: "error" } : t
+                    ));
+                    toast.error(`Error al subir ${task.name}`);
+                }
+            };
+
+            xhr.onerror = () => {
+                setUploadTasks(prev => prev.map(t =>
+                    t.id === task.id ? { ...t, status: "error" } : t
+                ));
+            };
+
+            xhr.open("POST", "/api/upload");
+            xhr.send(formData);
+        });
+
         if (inputRef.current) inputRef.current.value = "";
     };
 
@@ -227,10 +297,45 @@ export default function FileExplorer() {
                         <Upload className="w-4 h-4" />
                         <span className="hidden sm:inline">Subir</span>
                     </Button>
-                    <Button variant="ghost" size="sm" className="gap-2" onClick={createFolder}>
-                        <Plus className="w-4 h-4" />
-                        <span className="hidden sm:inline">Nueva Carpeta</span>
-                    </Button>
+
+                    <Dialog open={isNewFolderDialogOpen} onOpenChange={setIsNewFolderDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="gap-2">
+                                <Plus className="w-4 h-4" />
+                                <span className="hidden sm:inline">Nueva Carpeta</span>
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Crear Nueva Carpeta</DialogTitle>
+                                <DialogDescription>
+                                    Asigna un nombre a tu nueva carpeta en <strong>{currentPath}</strong>
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex items-center space-x-2 py-4">
+                                <div className="grid flex-1 gap-2">
+                                    <Label htmlFor="folderName" className="sr-only">Nombre</Label>
+                                    <Input
+                                        id="folderName"
+                                        placeholder="Nombre de la carpeta"
+                                        value={newFolderName}
+                                        onChange={(e) => setNewFolderName(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && createFolder()}
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter className="sm:justify-end">
+                                <Button type="button" variant="secondary" onClick={() => setIsNewFolderDialogOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button type="button" onClick={createFolder} disabled={!newFolderName}>
+                                    Crear Carpeta
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
                     <div className="w-[1px] h-6 bg-border mx-1" />
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadFolder(currentPath)}>
                         <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
@@ -398,6 +503,15 @@ export default function FileExplorer() {
                     )}
                 </div>
             </ScrollArea>
+
+            <UploadDashboard
+                uploads={uploadTasks}
+                isOpen={isUploadDashboardOpen}
+                onClose={() => {
+                    setIsUploadDashboardOpen(false);
+                    setUploadTasks([]);
+                }}
+            />
         </div>
     );
 }
