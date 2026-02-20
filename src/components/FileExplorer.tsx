@@ -75,6 +75,7 @@ export default function FileExplorer() {
     const [isUploadDashboardOpen, setIsUploadDashboardOpen] = React.useState(false);
     const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = React.useState(false);
     const [newFolderName, setNewFolderName] = React.useState("");
+    const xhrRefs = React.useRef<Record<string, XMLHttpRequest>>({});
 
     React.useEffect(() => {
         const t = localStorage.getItem('theme') as "light" | "dark" ||
@@ -134,7 +135,9 @@ export default function FileExplorer() {
         if (file.isFolder) {
             loadFolder(file.path);
         } else {
-            const url = `http://192.168.1.50/remote.php/dav/files/admus${file.path}`;
+            // Utilizar ruta relativa para evitar errores de conexión por IP fija
+            // Esto asume que el servidor dav está en la misma base o configurado en el backend
+            const url = `/api/download?path=${encodeURIComponent(file.path)}`;
             window.open(url, "_blank");
         }
     };
@@ -252,10 +255,20 @@ export default function FileExplorer() {
             };
 
             xhr.open("POST", "/api/upload");
+            xhrRefs.current[task.id] = xhr;
             xhr.send(formData);
         });
 
         if (inputRef.current) inputRef.current.value = "";
+    };
+
+    const cancelUpload = (id: string) => {
+        if (xhrRefs.current[id]) {
+            xhrRefs.current[id].abort();
+            delete xhrRefs.current[id];
+        }
+        setUploadTasks(prev => prev.filter(t => t.id !== id));
+        if (uploadTasks.length <= 1) setIsUploadDashboardOpen(false);
     };
 
     const formatBytes = (bytes: number) => {
@@ -425,9 +438,24 @@ export default function FileExplorer() {
                             <p className="text-muted-foreground animate-pulse">Cargando archivos...</p>
                         </div>
                     ) : filteredFiles.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 opacity-50 pointer-events-none">
-                            <Folder className="w-16 h-16 mb-4" />
-                            <p>{searchQuery ? "No se encontraron resultados" : "Esta carpeta está vacía"}</p>
+                        <div className="flex flex-col items-center justify-center py-20 bg-muted/10 rounded-xl border-2 border-dashed border-muted">
+                            <div className="p-6 bg-background rounded-full shadow-sm mb-6">
+                                <Folder className="w-12 h-12 text-muted-foreground" strokeWidth={1.5} />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-2">
+                                {searchQuery ? "No se encontraron resultados" : "Carpeta vacía"}
+                            </h3>
+                            <p className="text-muted-foreground text-sm mb-8 text-center max-w-[250px]">
+                                {searchQuery
+                                    ? `No hay elementos que coincidan con "${searchQuery}"`
+                                    : "Esta carpeta no tiene contenido aún. ¡Sube algo para empezar!"}
+                            </p>
+                            {!searchQuery && (
+                                <Button size="lg" className="gap-2 px-8 shadow-md" onClick={() => inputRef.current?.click()}>
+                                    <Upload className="w-5 h-5" />
+                                    Subir Archivos
+                                </Button>
+                            )}
                         </div>
                     ) : viewMode === "grid" ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
@@ -507,7 +535,10 @@ export default function FileExplorer() {
             <UploadDashboard
                 uploads={uploadTasks}
                 isOpen={isUploadDashboardOpen}
+                onCancelUpload={cancelUpload}
                 onClose={() => {
+                    Object.values(xhrRefs.current).forEach(xhr => xhr.abort());
+                    xhrRefs.current = {};
                     setIsUploadDashboardOpen(false);
                     setUploadTasks([]);
                 }}
