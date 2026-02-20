@@ -22,15 +22,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    const client = createClient(`${baseUrl}/remote.php/dav`, {
+    const client = createClient(baseUrl, {
       username: user,
       password: appPassword,
     });
 
     // Ruta completa de destino
-    const destPath = folderPath
-      ? `${webdavBase}/${folderPath}/${safeName}`
-      : `${webdavBase}/${safeName}`;
+    const destPath = `${webdavBase}/${folderPath}/${safeName}`.replace(/\/+/g, '/');
 
     console.log('→ Upload PUT (Client):', destPath);
 

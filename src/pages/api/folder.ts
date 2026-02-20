@@ -12,15 +12,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     const safeName = folderName.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    const client = createClient(`${baseUrl}/remote.php/dav`, {
+    const client = createClient(baseUrl, {
       username: user,
       password: appPassword,
     });
 
     // Construir la ruta completa
-    const destPath = parentPath
-      ? `${webdavBase}/${parentPath}/${safeName}`
-      : `${webdavBase}/${safeName}`;
+    const destPath = `${webdavBase}/${parentPath}/${safeName}`.replace(/\/+/g, '/');
 
     console.log('→ Create Directory (Client):', destPath);
 

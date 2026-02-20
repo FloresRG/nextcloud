@@ -498,12 +498,19 @@ import Layout from "../layouts/Layout.astro";
 			try {
 				const encodedPath = encodeURIComponent(currentPath).replace(/%2F/g, "/");
 				const apiUrl = `/api/files${encodedPath === "/" ? "" : encodedPath}`;
+				console.log("[FRONTEND DEBUG] Loading Folder Path:", currentPath);
+				console.log("[FRONTEND DEBUG] Fetching API URL:", apiUrl);
+				
 				const res = await fetch(apiUrl);
+				console.log("[FRONTEND DEBUG] API Status:", res.status);
+				
 				const result = await res.json();
+				console.log("[FRONTEND DEBUG] API Data:", result);
 
 				if (!result.success) throw new Error(result.error || "Error desconocido");
 				
 				allFiles = result.items || [];
+				console.log("[FRONTEND DEBUG] Rendered Files Count:", allFiles.length);
 				renderFiles(allFiles);
 			} catch (err) {
 				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem">❌</div><p>Error: ${err.message}</p><button class="btn" onclick="loadFolder()" style="margin-top:1rem">🔄 Reintentar</button></div>`;
