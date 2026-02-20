@@ -1,0 +1,342 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Explorador">
+	<nav class="breadcrumb" id="breadcrumb">
+		<span class="breadcrumb-item" data-path="/">🏠 Inicio</span>
+	</nav>
+	<div class="actions">
+		<button class="btn btn-success" onclick="showCreateModal()"
+			>📁 Nueva Carpeta</button
+		>
+		<button class="btn" onclick="triggerFileSelect()"
+			>📤 Subir Archivo</button
+		>
+		<button
+			class="btn btn-secondary"
+			style="flex:0.5"
+			onclick="loadFolder()">🔄</button
+		>
+	</div>
+	<main class="file-grid" id="fileGrid">
+		<div class="empty-state">
+			<div class="icon">📂</div><p>Cargando...</p>
+		</div>
+	</main>
+
+	<!-- Modales -->
+	<div class="modal-overlay" id="createModal">
+		<div class="modal">
+			<h3>📁 Nueva Carpeta</h3><input
+				type="text"
+				id="folderName"
+				placeholder="Nombre de la carpeta"
+			/><div class="modal-actions">
+				<button
+					class="modal-btn modal-btn-cancel"
+					onclick="closeModal('createModal')">Cancelar</button
+				><button
+					class="modal-btn modal-btn-confirm"
+					onclick="createFolder()">Crear</button>
+			</div>
+		</div>
+	</div>
+	<div class="modal-overlay" id="uploadModal">
+		<div class="modal">
+			<h3>📤 Subiendo</h3><p
+				id="uploadFileName"
+				style="margin:.5rem 0;color:var(--text-secondary)"
+			>
+			</p><div class="progress-bar">
+				<div class="progress-fill" id="uploadProgress"></div>
+			</div><p
+				id="uploadPercent"
+				style="text-align:center;margin:0;font-size:.9rem"
+			>
+				0%
+			</p>
+		</div>
+	</div>
+
+	<script>
+		// ============================================
+		// UTILIDADES (definidas AQUÍ para que estén disponibles)
+		// ============================================
+		function showToast(msg, type = "success") {
+			const t = document.getElementById("toast");
+			if (!t) return;
+			t.textContent = msg;
+			t.className = `toast ${type} show`;
+			setTimeout(() => {
+				t.className = "toast";
+			}, 3000);
+		}
+
+		function formatBytes(b) {
+			if (b === 0) return "0 B";
+			const k = 1024,
+				sizes = ["B", "KB", "MB", "GB"];
+			const i = Math.floor(Math.log(b) / Math.log(k));
+			return parseFloat((b / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+		}
+
+		function getFileIcon(name, isFolder, mime = "") {
+			if (isFolder) return "📁";
+			const l = name.toLowerCase();
+			if (mime.includes("video") || /\.(mp4|avi|mov|mkv)$/.test(l))
+				return "🎬";
+			if (mime.includes("image") || /\.(jpg|jpeg|png|gif)$/.test(l))
+				return "🖼️";
+			if (mime.includes("audio") || /\.(mp3|wav)$/.test(l)) return "🎵";
+			if (mime.includes("pdf") || l.endsWith(".pdf")) return "📄";
+			return "📄";
+		}
+
+		function escapeHtml(t) {
+			const d = document.createElement("div");
+			d.textContent = t;
+			return d.innerHTML;
+		}
+
+		// ============================================
+		// LÓGICA PRINCIPAL
+		// ============================================
+		let currentPath = "/";
+
+		document.addEventListener("DOMContentLoaded", () => {
+			loadFolder();
+
+			document
+				.getElementById("folderName")
+				?.addEventListener("keypress", (e) => {
+					if (e.key === "Enter") createFolder();
+				});
+
+			document.querySelectorAll(".modal-overlay").forEach((m) => {
+				m.addEventListener("click", (e) => {
+					if (e.target === m) m.classList.remove("active");
+				});
+			});
+		});
+
+		async function loadFolder(path = currentPath) {
+			currentPath = path;
+			updateBreadcrumb();
+
+			const grid = document.getElementById("fileGrid");
+			if (!grid) return;
+
+			grid.innerHTML =
+				'<div class="empty-state"><div class="loading"></div><p>Cargando...</p></div>';
+
+			try {
+				// Codificar ruta para URL
+				const encodedPath = encodeURIComponent(currentPath).replace(
+					/%2F/g,
+					"/",
+				);
+				const apiUrl = `/api/files${encodedPath === "/" ? "" : encodedPath}`;
+
+				console.log("Fetching:", apiUrl);
+				const res = await fetch(apiUrl);
+
+				if (res.status === 404) {
+					throw new Error(
+						"API endpoint no encontrado. Verifica que el servidor Astro esté corriendo con SSR.",
+					);
+				}
+
+				const result = await res.json();
+				console.log("API Response:", result);
+
+				if (!result.success)
+					throw new Error(result.error || "Error desconocido");
+				renderFiles(result.items || result.data || result.files || []);
+			} catch (err) {
+				console.error("Load error:", err);
+				grid.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Error: ${err.message}</p><button class="btn" onclick="loadFolder()">🔄 Reintentar</button></div>`;
+				showToast("Error al cargar: " + err.message, "error");
+			}
+		}
+
+		function renderFiles(files) {
+			const grid = document.getElementById("fileGrid");
+			if (!grid) return;
+
+			if (!files || files.length === 0) {
+				grid.innerHTML = `<div class="empty-state"><div class="icon">📂</div><p>Carpeta vacía</p></div>`;
+				return;
+			}
+
+			grid.innerHTML = files
+				.map((f) => {
+					const clickPath = f.isFolder
+						? f.path
+						: decodeURIComponent(f.path);
+					const clickAction = f.isFolder
+						? `loadFolder('${escapeJs(clickPath)}')`
+						: `openFile('${escapeJs(f.path)}')`;
+
+					return `
+          <div class="file-item" onclick="${clickAction}">
+            <span class="file-icon">${getFileIcon(f.name, f.isFolder, f.mime)}</span>
+            <div class="file-name">${escapeHtml(f.name)}</div>
+            <div class="file-info">${f.isFolder ? "Carpeta" : formatBytes(f.size)}</div>
+          </div>
+        `;
+				})
+				.join("");
+		}
+
+		function updateBreadcrumb() {
+			const breadcrumb = document.getElementById("breadcrumb");
+			if (!breadcrumb) return;
+
+			const parts = currentPath.split("/").filter((p) => p);
+			let html =
+				'<span class="breadcrumb-item" data-path="/">🏠 Inicio</span>';
+			let acc = "";
+
+			parts.forEach((part, i) => {
+				acc += "/" + part;
+				if (i === parts.length - 1) {
+					html += `<span class="breadcrumb-current">/ ${escapeHtml(part)}</span>`;
+				} else {
+					html += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-item" data-path="${acc}">${escapeHtml(part)}</span>`;
+				}
+			});
+
+			breadcrumb.innerHTML = html;
+
+			breadcrumb.querySelectorAll(".breadcrumb-item").forEach((item) => {
+				item.onclick = () => loadFolder(item.dataset.path);
+			});
+		}
+
+		function openFile(path) {
+			const url = `http://192.168.1.50/remote.php/dav/files/admus${path}`;
+			window.open(url, "_blank");
+		}
+
+		function showCreateModal() {
+			document.getElementById("createModal")?.classList.add("active");
+			const input = document.getElementById("folderName");
+			if (input) {
+				input.value = "";
+				input.focus();
+			}
+		}
+
+		function closeModal(id) {
+			document.getElementById(id)?.classList.remove("active");
+		}
+
+		async function createFolder() {
+			const name = document.getElementById("folderName")?.value.trim();
+			if (!name) return showToast("Ingresa un nombre", "error");
+
+			closeModal("createModal");
+
+			try {
+				const res = await fetch("/api/folder", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						folderName: name,
+						parentPath: currentPath,
+					}),
+				});
+
+				const result = await res.json();
+				if (result.success) {
+					showToast(`✅ Carpeta "${name}" creada`);
+					loadFolder();
+				} else {
+					throw new Error(result.error || "Error al crear");
+				}
+			} catch (err) {
+				showToast("❌ Error: " + err.message, "error");
+			}
+		}
+
+		function triggerFileSelect() {
+			document.getElementById("fileInput")?.click();
+		}
+
+		document
+			.getElementById("fileInput")
+			?.addEventListener("change", async (e) => {
+				const files = Array.from(e.target.files || []);
+				if (files.length === 0) return;
+
+				for (const file of files) {
+					await uploadFile(file);
+				}
+				e.target.value = "";
+			});
+
+		async function uploadFile(file) {
+			const modal = document.getElementById("uploadModal");
+			const fnEl = document.getElementById("uploadFileName");
+			const prEl = document.getElementById("uploadProgress");
+			const pcEl = document.getElementById("uploadPercent");
+
+			if (modal) modal.classList.add("active");
+			if (fnEl) fnEl.textContent = file.name;
+			if (prEl) prEl.style.width = "0%";
+			if (pcEl) pcEl.textContent = "0%";
+
+			const formData = new FormData();
+			formData.append("file", file);
+			formData.append("folderPath", currentPath);
+
+			const xhr = new XMLHttpRequest();
+			xhr.open("POST", "/api/upload", true);
+
+			xhr.upload.onprogress = (e) => {
+				if (e.lengthComputable && prEl && pcEl) {
+					const p = (e.loaded / e.total) * 100;
+					prEl.style.width = p.toFixed(1) + "%";
+					pcEl.textContent = p.toFixed(0) + "%";
+				}
+			};
+
+			xhr.onload = () => {
+				if (modal) modal.classList.remove("active");
+
+				if (xhr.status === 200) {
+					try {
+						const result = JSON.parse(xhr.responseText);
+						if (result.success) {
+							showToast(`✅ "${file.name}" subido`);
+							loadFolder();
+						} else {
+							showToast(
+								"❌ Error: " + (result.error || "Desconocido"),
+								"error",
+							);
+						}
+					} catch {
+						showToast("✅ Archivo subido (respuesta no JSON)");
+						loadFolder();
+					}
+				} else {
+					showToast(`❌ Error HTTP ${xhr.status}`, "error");
+				}
+			};
+
+			xhr.onerror = () => {
+				if (modal) modal.classList.remove("active");
+				showToast("❌ Error de conexión", "error");
+			};
+
+			xhr.send(formData);
+		}
+
+		// Helper para escapar strings en onclick
+		function escapeJs(str) {
+			return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
+		}
+	</script>
+</Layout>
