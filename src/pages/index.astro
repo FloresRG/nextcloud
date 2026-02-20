@@ -3,80 +3,361 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Explorador">
-	<nav class="breadcrumb" id="breadcrumb">
-		<span class="breadcrumb-item" data-path="/">🏠 Inicio</span>
-	</nav>
-	<div class="actions">
-		<button class="btn btn-success" onclick="showCreateModal()"
-			>📁 Nueva Carpeta</button
-		>
-		<button class="btn" onclick="triggerFileSelect()"
-			>📤 Subir Archivo</button
-		>
-		<button
-			class="btn btn-secondary"
-			style="flex:0.5"
-			onclick="loadFolder()">🔄</button
-		>
+	<div class="content-wrapper">
+		<!-- Sidebar -->
+		<aside class="sidebar">
+			<div class="sidebar-section">
+				<p class="section-title">Navegación</p>
+				<button class="sidebar-item active" id="btn-home" onclick="loadFolder('/')">
+					<span class="icon">🏠</span> Inicio
+				</button>
+			</div>
+			
+			<div class="sidebar-section">
+				<p class="section-title">Acciones</p>
+				<button class="action-card" onclick="triggerFileSelect()">
+					<div class="icon">📤</div>
+					<div>
+						<p class="title">Subir Archivos</p>
+						<p class="desc">Arrastra o selecciona</p>
+					</div>
+				</button>
+				<button class="action-card" onclick="showCreateModal()">
+					<div class="icon">📁</div>
+					<div>
+						<p class="title">Nueva Carpeta</p>
+						<p class="desc">Crear subdirectorio</p>
+					</div>
+				</button>
+			</div>
+
+			<div id="upload-queue-container" class="upload-sidebar-section" style="display:none">
+				<div class="section-header">
+					<p class="section-title">Subidas en curso</p>
+					<span id="queue-count" class="badge">0</span>
+				</div>
+				<div id="upload-items-list" class="upload-list"></div>
+			</div>
+		</aside>
+
+		<!-- Main Area -->
+		<section class="main-area">
+			<header class="view-header">
+				<nav class="breadcrumb-nav" id="breadcrumb"></nav>
+				<div class="view-controls">
+					<div class="search-box">
+						<span class="icon">🔍</span>
+						<input type="text" id="fileSearch" placeholder="Buscar en esta carpeta..." />
+					</div>
+					<button class="icon-btn" onclick="loadFolder()" title="Refrescar">🔄</button>
+				</div>
+			</header>
+
+			<div class="drop-zone" id="dropZone">
+				<div class="drop-overlay">
+					<div class="drop-info">
+						<div class="icon">📥</div>
+						<p>Suelta los archivos para subirlos</p>
+					</div>
+				</div>
+				<main class="file-view" id="fileGrid">
+					<div class="loading-state">
+						<div class="spinner"></div>
+						<p>Sincronizando con Nexus...</p>
+					</div>
+				</main>
+			</div>
+		</section>
 	</div>
-	<main class="file-grid" id="fileGrid">
-		<div class="empty-state">
-			<div class="icon">📂</div><p>Cargando...</p>
-		</div>
-	</main>
 
 	<!-- Modales -->
 	<div class="modal-overlay" id="createModal">
 		<div class="modal">
-			<h3>📁 Nueva Carpeta</h3><input
-				type="text"
-				id="folderName"
-				placeholder="Nombre de la carpeta"
-			/><div class="modal-actions">
-				<button
-					class="modal-btn modal-btn-cancel"
-					onclick="closeModal('createModal')">Cancelar</button
-				><button
-					class="modal-btn modal-btn-confirm"
-					onclick="createFolder()">Crear</button>
+			<h3>📁 Nueva Carpeta</h3>
+			<input type="text" id="folderName" placeholder="Nombre de la carpeta" autofocus />
+			<div class="modal-actions">
+				<button class="btn" onclick="closeModal('createModal')">Cancelar</button>
+				<button class="btn btn-primary" onclick="createFolder()">Crear Carpeta</button>
 			</div>
 		</div>
 	</div>
-	<div class="modal-overlay" id="uploadModal">
-		<div class="modal">
-			<h3>📤 Subiendo</h3><p
-				id="uploadFileName"
-				style="margin:.5rem 0;color:var(--text-secondary)"
-			>
-			</p><div class="progress-bar">
-				<div class="progress-fill" id="uploadProgress"></div>
-			</div><p
-				id="uploadPercent"
-				style="text-align:center;margin:0;font-size:.9rem"
-			>
-				0%
-			</p>
-		</div>
-	</div>
+
+	<style>
+		.content-wrapper {
+			display: flex;
+			flex: 1;
+			height: calc(100vh - var(--header-height));
+			overflow: hidden;
+		}
+
+		/* Sidebar Styles */
+		.sidebar {
+			width: var(--sidebar-width);
+			background: var(--surface);
+			border-right: 1px solid var(--border);
+			padding: 1.5rem;
+			display: flex;
+			flex-direction: column;
+			gap: 2rem;
+			overflow-y: auto;
+		}
+
+		.sidebar-section { display: flex; flex-direction: column; gap: 0.5rem; }
+		.section-title { 
+			font-size: 0.75rem; 
+			font-weight: 700; 
+			text-transform: uppercase; 
+			color: var(--text-muted);
+			letter-spacing: 0.05em;
+			margin: 0 0 0.5rem 0.5rem;
+		}
+
+		.sidebar-item {
+			width: 100%;
+			padding: 0.75rem 1rem;
+			border: none;
+			background: transparent;
+			border-radius: var(--radius);
+			color: var(--text-secondary);
+			font-size: 0.9rem;
+			font-weight: 500;
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			cursor: pointer;
+			text-align: left;
+			transition: var(--transition);
+		}
+
+		.sidebar-item:hover, .sidebar-item.active {
+			background: var(--bg);
+			color: var(--text);
+			box-shadow: var(--shadow-sm);
+		}
+
+		.action-card {
+			width: 100%;
+			padding: 1rem;
+			border: 1px dashed var(--border);
+			background: var(--bg);
+			border-radius: var(--radius);
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			cursor: pointer;
+			text-align: left;
+			transition: var(--transition);
+		}
+
+		.action-card:hover {
+			border-color: var(--text);
+			background: var(--surface);
+		}
+
+		.action-card .icon {
+			font-size: 1.5rem;
+			background: var(--surface-2);
+			width: 44px;
+			height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 10px;
+		}
+
+		.action-card .title { font-weight: 600; font-size: 0.9rem; margin: 0; }
+		.action-card .desc { font-size: 0.75rem; color: var(--text-muted); margin: 0; }
+
+		/* Main Area Styles */
+		.main-area {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			background: var(--bg);
+			position: relative;
+		}
+
+		.view-header {
+			padding: 1rem 2rem;
+			border-bottom: 1px solid var(--border);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			flex-wrap: wrap;
+		}
+
+		.breadcrumb-nav { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+		.breadcrumb-item { 
+			color: var(--text-secondary); 
+			cursor: pointer; 
+			transition: var(--transition);
+		}
+		.breadcrumb-item:hover { color: var(--text); font-weight: 500; }
+		.breadcrumb-separator { color: var(--text-muted); opacity: 0.5; }
+		.breadcrumb-current { font-weight: 600; color: var(--text); }
+
+		.view-controls { display: flex; align-items: center; gap: 0.75rem; }
+		.search-box {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 50px;
+			padding: 0.4rem 1rem;
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			width: 260px;
+		}
+
+		.search-box input {
+			border: none;
+			background: transparent;
+			outline: none;
+			font-size: 0.85rem;
+			width: 100%;
+			color: var(--text);
+		}
+
+		.icon-btn {
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			border: 1px solid var(--border);
+			background: var(--bg);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: var(--transition);
+		}
+		.icon-btn:hover { background: var(--surface); border-color: var(--text); }
+
+		/* Drop Zone & Grid */
+		.drop-zone { flex: 1; position: relative; overflow-y: auto; }
+		.drop-overlay {
+			position: absolute;
+			inset: 0.5rem;
+			background: rgba(var(--bg-rgb), 0.9);
+			border: 2px dashed var(--text);
+			border-radius: var(--radius);
+			z-index: 10;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			pointer-events: none;
+		}
+		.drop-zone.dragging .drop-overlay { display: flex; }
+		.drop-info { text-align: center; }
+		.drop-info .icon { font-size: 3rem; margin-bottom: 1rem; }
+		.drop-info p { font-weight: 600; font-size: 1.2rem; }
+
+		.file-view {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			gap: 1.5rem;
+			padding: 2rem;
+		}
+
+		.file-card {
+			padding: 1.25rem;
+			background: var(--bg);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 0.75rem;
+			cursor: pointer;
+			transition: var(--transition);
+			position: relative;
+		}
+
+		.file-card:hover {
+			border-color: var(--text);
+			box-shadow: var(--shadow-md);
+			transform: translateY(-2px);
+		}
+
+		.file-card .icon { font-size: 2.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		.file-card .name {
+			font-size: 0.85rem;
+			font-weight: 500;
+			text-align: center;
+			width: 100%;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			color: var(--text);
+		}
+		.file-card .info { font-size: 0.7rem; color: var(--text-muted); }
+
+		/* Batch Upload SidebarSection */
+		.upload-sidebar-section {
+			background: var(--surface-2);
+			border-radius: var(--radius);
+			padding: 1rem;
+			margin-top: auto;
+		}
+		.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+		.badge {
+			background: var(--text);
+			color: var(--bg);
+			font-size: 0.7rem;
+			font-weight: 700;
+			padding: 0.1rem 0.4rem;
+			border-radius: 4px;
+		}
+		.upload-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 200px; overflow-y: auto; }
+		.upload-item { background: var(--bg); padding: 0.6rem; border-radius: 8px; font-size: 0.75rem; border: 1px solid var(--border); }
+		.upload-item-name { 
+			white-space: nowrap; 
+			overflow: hidden; 
+			text-overflow: ellipsis; 
+			margin-bottom: 0.4rem; 
+			font-weight: 500;
+		}
+		.progress-mini { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+		.progress-fill-mini { height: 100%; background: var(--text); transition: width 0.3s ease; }
+
+		.loading-state { grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted); }
+		.spinner {
+			width: 40px;
+			height: 40px;
+			border: 3px solid var(--border);
+			border-top-color: var(--text);
+			border-radius: 50%;
+			animation: spin 1s linear infinite;
+			margin: 0 auto 1.5rem;
+		}
+
+		@keyframes spin { to { transform: rotate(360deg); } }
+
+		@media (max-width: 768px) {
+			.sidebar { display: none; }
+			.view-header { padding: 1rem; }
+			.file-view { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 1rem; padding: 1rem; }
+		}
+	</style>
 
 	<script>
 		// ============================================
-		// UTILIDADES (definidas AQUÍ para que estén disponibles)
+		// UTILIDADES Y ESTADO GLOBAL
 		// ============================================
+		let currentPath = "/";
+		let allFiles = []; // Cache para búsqueda
+		const MAX_CONCURRENT_UPLOADS = 3;
+
 		function showToast(msg, type = "success") {
 			const t = document.getElementById("toast");
 			if (!t) return;
 			t.textContent = msg;
 			t.className = `toast ${type} show`;
-			setTimeout(() => {
-				t.className = "toast";
-			}, 3000);
+			setTimeout(() => t.classList.remove("show"), 3000);
 		}
 
 		function formatBytes(b) {
 			if (b === 0) return "0 B";
-			const k = 1024,
-				sizes = ["B", "KB", "MB", "GB"];
+			const k = 1024, sizes = ["B", "KB", "MB", "GB", "TB"];
 			const i = Math.floor(Math.log(b) / Math.log(k));
 			return parseFloat((b / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 		}
@@ -84,12 +365,12 @@ import Layout from "../layouts/Layout.astro";
 		function getFileIcon(name, isFolder, mime = "") {
 			if (isFolder) return "📁";
 			const l = name.toLowerCase();
-			if (mime.includes("video") || /\.(mp4|avi|mov|mkv)$/.test(l))
-				return "🎬";
-			if (mime.includes("image") || /\.(jpg|jpeg|png|gif)$/.test(l))
-				return "🖼️";
-			if (mime.includes("audio") || /\.(mp3|wav)$/.test(l)) return "🎵";
-			if (mime.includes("pdf") || l.endsWith(".pdf")) return "📄";
+			if (mime.includes("video") || /\.(mp4|avi|mov|mkv)$/.test(l)) return "🎬";
+			if (mime.includes("image") || /\.(jpg|jpeg|png|gif|webp)$/.test(l)) return "🖼️";
+			if (mime.includes("audio") || /\.(mp3|wav|ogg)$/.test(l)) return "🎵";
+			if (mime.includes("pdf")) return "📄";
+			if (/\.(zip|rar|7z|tar|gz)$/.test(l)) return "📦";
+			if (/\.(doc|docx|txt|md)$/.test(l)) return "📝";
 			return "📄";
 		}
 
@@ -100,62 +381,132 @@ import Layout from "../layouts/Layout.astro";
 		}
 
 		// ============================================
-		// LÓGICA PRINCIPAL
+		// GESTOR DE SUBIDAS (BATCH UPLOAD)
 		// ============================================
-		let currentPath = "/";
+		class UploadQueue {
+			constructor() {
+				this.queue = [];
+				this.activeCount = 0;
+				this.container = document.getElementById("upload-queue-container");
+				this.list = document.getElementById("upload-items-list");
+				this.countBadge = document.getElementById("queue-count");
+			}
 
-		document.addEventListener("DOMContentLoaded", () => {
-			loadFolder();
+			add(file) {
+				const id = 'up-' + Math.random().toString(36).substr(2, 9);
+				const item = { id, file, status: 'pending', progress: 0 };
+				this.queue.push(item);
+				this.renderItem(item);
+				this.updateUI();
+				this.process();
+			}
 
-			document
-				.getElementById("folderName")
-				?.addEventListener("keypress", (e) => {
-					if (e.key === "Enter") createFolder();
+			renderItem(item) {
+				const div = document.createElement('div');
+				div.id = item.id;
+				div.className = 'upload-item';
+				div.innerHTML = `
+					<div class="upload-item-name" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</div>
+					<div class="progress-mini">
+						<div class="progress-fill-mini" style="width: 0%"></div>
+					</div>
+				`;
+				this.list.prepend(div);
+			}
+
+			updateUI() {
+				if (this.queue.length > 0) {
+					this.container.style.display = 'block';
+					this.countBadge.textContent = this.queue.length;
+				} else {
+					this.container.style.display = 'none';
+				}
+			}
+
+			async process() {
+				if (this.activeCount >= MAX_CONCURRENT_UPLOADS) return;
+				
+				const next = this.queue.find(i => i.status === 'pending');
+				if (!next) return;
+
+				next.status = 'uploading';
+				this.activeCount++;
+				
+				await this.doUpload(next);
+				
+				this.activeCount--;
+				this.process();
+			}
+
+			async doUpload(item) {
+				const formData = new FormData();
+				formData.append("file", item.file);
+				formData.append("folderPath", currentPath);
+
+				return new Promise((resolve) => {
+					const xhr = new XMLHttpRequest();
+					xhr.open("POST", "/api/upload", true);
+
+					xhr.upload.onprogress = (e) => {
+						if (e.lengthComputable) {
+							const p = (e.loaded / e.total) * 100;
+							const fill = document.querySelector(`#${item.id} .progress-fill-mini`);
+							if (fill) fill.style.width = p + "%";
+						}
+					};
+
+					xhr.onload = () => {
+						const div = document.getElementById(item.id);
+						if (xhr.status === 200) {
+							div?.remove();
+							this.queue = this.queue.filter(i => i.id !== item.id);
+							showToast(`✅ "${item.file.name}" subido`);
+							if (this.queue.length === 0) loadFolder();
+						} else {
+							div.style.borderColor = 'var(--error)';
+							showToast(`❌ Error al subir ${item.file.name}`, 'error');
+						}
+						this.updateUI();
+						resolve();
+					};
+
+					xhr.onerror = () => {
+						showToast("❌ Error de conexión", "error");
+						resolve();
+					};
+
+					xhr.send(formData);
 				});
+			}
+		}
 
-			document.querySelectorAll(".modal-overlay").forEach((m) => {
-				m.addEventListener("click", (e) => {
-					if (e.target === m) m.classList.remove("active");
-				});
-			});
-		});
+		const uploader = new UploadQueue();
 
+		// ============================================
+		// NAVEGACIÓN Y CARGA
+		// ============================================
 		async function loadFolder(path = currentPath) {
 			currentPath = path;
 			updateBreadcrumb();
+			updateSidebarActive();
 
 			const grid = document.getElementById("fileGrid");
 			if (!grid) return;
 
-			grid.innerHTML =
-				'<div class="empty-state"><div class="loading"></div><p>Cargando...</p></div>';
+			grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Sincronizando con Nexus...</p></div>';
 
 			try {
-				// Codificar ruta para URL
-				const encodedPath = encodeURIComponent(currentPath).replace(
-					/%2F/g,
-					"/",
-				);
+				const encodedPath = encodeURIComponent(currentPath).replace(/%2F/g, "/");
 				const apiUrl = `/api/files${encodedPath === "/" ? "" : encodedPath}`;
-
-				console.log("Fetching:", apiUrl);
 				const res = await fetch(apiUrl);
-
-				if (res.status === 404) {
-					throw new Error(
-						"API endpoint no encontrado. Verifica que el servidor Astro esté corriendo con SSR.",
-					);
-				}
-
 				const result = await res.json();
-				console.log("API Response:", result);
 
-				if (!result.success)
-					throw new Error(result.error || "Error desconocido");
-				renderFiles(result.items || result.data || result.files || []);
+				if (!result.success) throw new Error(result.error || "Error desconocido");
+				
+				allFiles = result.items || [];
+				renderFiles(allFiles);
 			} catch (err) {
-				console.error("Load error:", err);
-				grid.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Error: ${err.message}</p><button class="btn" onclick="loadFolder()">🔄 Reintentar</button></div>`;
+				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem">❌</div><p>Error: ${err.message}</p><button class="btn" onclick="loadFolder()" style="margin-top:1rem">🔄 Reintentar</button></div>`;
 				showToast("Error al cargar: " + err.message, "error");
 			}
 		}
@@ -164,179 +515,127 @@ import Layout from "../layouts/Layout.astro";
 			const grid = document.getElementById("fileGrid");
 			if (!grid) return;
 
-			if (!files || files.length === 0) {
-				grid.innerHTML = `<div class="empty-state"><div class="icon">📂</div><p>Carpeta vacía</p></div>`;
+			if (files.length === 0) {
+				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem">📂</div><p>Esta carpeta está vacía</p></div>`;
 				return;
 			}
 
-			grid.innerHTML = files
-				.map((f) => {
-					const clickPath = f.isFolder
-						? f.path
-						: decodeURIComponent(f.path);
-					const clickAction = f.isFolder
-						? `loadFolder('${escapeJs(clickPath)}')`
-						: `openFile('${escapeJs(f.path)}')`;
-
-					return `
-          <div class="file-item" onclick="${clickAction}">
-            <span class="file-icon">${getFileIcon(f.name, f.isFolder, f.mime)}</span>
-            <div class="file-name">${escapeHtml(f.name)}</div>
-            <div class="file-info">${f.isFolder ? "Carpeta" : formatBytes(f.size)}</div>
-          </div>
-        `;
-				})
-				.join("");
+			grid.innerHTML = files.map(f => `
+				<div class="file-card" onclick="${f.isFolder ? `loadFolder('${f.path.replace(/'/g, "\\'")}')` : `openFile('${f.path.replace(/'/g, "\\'")}')`}">
+					<span class="icon">${getFileIcon(f.name, f.isFolder, f.mime)}</span>
+					<div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+					<div class="info">${f.isFolder ? "Carpeta" : formatBytes(f.size)}</div>
+				</div>
+			`).join("");
 		}
 
 		function updateBreadcrumb() {
-			const breadcrumb = document.getElementById("breadcrumb");
-			if (!breadcrumb) return;
+			const nav = document.getElementById("breadcrumb");
+			if (!nav) return;
 
-			const parts = currentPath.split("/").filter((p) => p);
-			let html =
-				'<span class="breadcrumb-item" data-path="/">🏠 Inicio</span>';
+			const parts = currentPath.split("/").filter(p => p);
+			let html = '<span class="breadcrumb-item" onclick="loadFolder(\'/\')">Inicio</span>';
 			let acc = "";
 
 			parts.forEach((part, i) => {
 				acc += "/" + part;
+				html += '<span class="breadcrumb-separator">/</span>';
 				if (i === parts.length - 1) {
-					html += `<span class="breadcrumb-current">/ ${escapeHtml(part)}</span>`;
+					html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
 				} else {
-					html += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-item" data-path="${acc}">${escapeHtml(part)}</span>`;
+					html += `<span class="breadcrumb-item" onclick="loadFolder('${acc.replace(/'/g, "\\'")}')">${escapeHtml(part)}</span>`;
 				}
 			});
 
-			breadcrumb.innerHTML = html;
+			nav.innerHTML = html;
+		}
 
-			breadcrumb.querySelectorAll(".breadcrumb-item").forEach((item) => {
-				item.onclick = () => loadFolder(item.dataset.path);
-			});
+		function updateSidebarActive() {
+			document.getElementById("btn-home")?.classList.toggle("active", currentPath === "/");
 		}
 
 		function openFile(path) {
+			// Podríamos usar una URL firmada o proxy, por ahora mantenemos el link directo al DAV
 			const url = `http://192.168.1.50/remote.php/dav/files/admus${path}`;
 			window.open(url, "_blank");
 		}
 
-		function showCreateModal() {
-			document.getElementById("createModal")?.classList.add("active");
+		// ============================================
+		// EVENTOS Y BÚSQUEDA
+		// ============================================
+		document.addEventListener("DOMContentLoaded", () => {
+			loadFolder();
+
+			// Búsqueda en tiempo real
+			document.getElementById("fileSearch")?.addEventListener("input", (e) => {
+				const term = e.target.value.toLowerCase();
+				const filtered = allFiles.filter(f => f.name.toLowerCase().includes(term));
+				renderFiles(filtered);
+			});
+
+			// Hotkey para búsqueda
+			window.addEventListener("keydown", (e) => {
+				if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+					e.preventDefault();
+					document.getElementById("fileSearch")?.focus();
+				}
+			});
+
+			// Drag and Drop
+			const dropZone = document.getElementById("dropZone");
+			window.addEventListener("dragover", (e) => {
+				e.preventDefault();
+				dropZone?.classList.add("dragging");
+			});
+			window.addEventListener("dragleave", (e) => {
+				if (e.relatedTarget === null) dropZone?.classList.remove("dragging");
+			});
+			dropZone?.addEventListener("drop", (e) => {
+				e.preventDefault();
+				dropZone?.classList.remove("dragging");
+				const files = Array.from(e.dataTransfer.files);
+				files.forEach(f => uploader.add(f));
+			});
+		});
+
+		// Acciones de archivos
+		window.triggerFileSelect = () => document.getElementById("fileInput")?.click();
+		
+		document.getElementById("fileInput")?.addEventListener("change", (e) => {
+			const files = Array.from(e.target.files);
+			files.forEach(f => uploader.add(f));
+			e.target.value = "";
+		});
+
+		// Carpetas
+		window.showCreateModal = () => {
+			const m = document.getElementById("createModal");
+			m.classList.add("active");
+			document.getElementById("folderName").focus();
+		};
+		window.closeModal = (id) => document.getElementById(id).classList.remove("active");
+		
+		window.createFolder = async () => {
 			const input = document.getElementById("folderName");
-			if (input) {
-				input.value = "";
-				input.focus();
-			}
-		}
-
-		function closeModal(id) {
-			document.getElementById(id)?.classList.remove("active");
-		}
-
-		async function createFolder() {
-			const name = document.getElementById("folderName")?.value.trim();
-			if (!name) return showToast("Ingresa un nombre", "error");
+			const name = input.value.trim();
+			if (!name) return;
 
 			closeModal("createModal");
-
 			try {
 				const res = await fetch("/api/folder", {
 					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						folderName: name,
-						parentPath: currentPath,
-					}),
+					body: JSON.stringify({ folderName: name, parentPath: currentPath })
 				});
-
-				const result = await res.json();
-				if (result.success) {
-					showToast(`✅ Carpeta "${name}" creada`);
+				const resData = await res.json();
+				if (resData.success) {
+					showToast(`Carpeta "${name}" creada`);
 					loadFolder();
-				} else {
-					throw new Error(result.error || "Error al crear");
-				}
+				} else throw new Error(resData.error);
 			} catch (err) {
-				showToast("❌ Error: " + err.message, "error");
+				showToast("Error: " + err.message, "error");
 			}
-		}
-
-		function triggerFileSelect() {
-			document.getElementById("fileInput")?.click();
-		}
-
-		document
-			.getElementById("fileInput")
-			?.addEventListener("change", async (e) => {
-				const files = Array.from(e.target.files || []);
-				if (files.length === 0) return;
-
-				for (const file of files) {
-					await uploadFile(file);
-				}
-				e.target.value = "";
-			});
-
-		async function uploadFile(file) {
-			const modal = document.getElementById("uploadModal");
-			const fnEl = document.getElementById("uploadFileName");
-			const prEl = document.getElementById("uploadProgress");
-			const pcEl = document.getElementById("uploadPercent");
-
-			if (modal) modal.classList.add("active");
-			if (fnEl) fnEl.textContent = file.name;
-			if (prEl) prEl.style.width = "0%";
-			if (pcEl) pcEl.textContent = "0%";
-
-			const formData = new FormData();
-			formData.append("file", file);
-			formData.append("folderPath", currentPath);
-
-			const xhr = new XMLHttpRequest();
-			xhr.open("POST", "/api/upload", true);
-
-			xhr.upload.onprogress = (e) => {
-				if (e.lengthComputable && prEl && pcEl) {
-					const p = (e.loaded / e.total) * 100;
-					prEl.style.width = p.toFixed(1) + "%";
-					pcEl.textContent = p.toFixed(0) + "%";
-				}
-			};
-
-			xhr.onload = () => {
-				if (modal) modal.classList.remove("active");
-
-				if (xhr.status === 200) {
-					try {
-						const result = JSON.parse(xhr.responseText);
-						if (result.success) {
-							showToast(`✅ "${file.name}" subido`);
-							loadFolder();
-						} else {
-							showToast(
-								"❌ Error: " + (result.error || "Desconocido"),
-								"error",
-							);
-						}
-					} catch {
-						showToast("✅ Archivo subido (respuesta no JSON)");
-						loadFolder();
-					}
-				} else {
-					showToast(`❌ Error HTTP ${xhr.status}`, "error");
-				}
-			};
-
-			xhr.onerror = () => {
-				if (modal) modal.classList.remove("active");
-				showToast("❌ Error de conexión", "error");
-			};
-
-			xhr.send(formData);
-		}
-
-		// Helper para escapar strings en onclick
-		function escapeJs(str) {
-			return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
-		}
+			input.value = "";
+		};
 	</script>
 </Layout>
+
