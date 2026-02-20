@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { createClient } from 'webdav';
-import { Buffer } from 'node:buffer';
 
 export const POST: APIRoute = async ({ request }) => {
   try {

@@ -150,8 +150,9 @@ import Layout from "../layouts/Layout.astro";
 		}
 
 		.action-card:hover {
-			border-color: var(--text);
+			border-color: var(--primary);
 			background: var(--surface);
+			transform: scale(1.02);
 		}
 
 		.action-card .icon {
@@ -163,10 +164,19 @@ import Layout from "../layouts/Layout.astro";
 			align-items: center;
 			justify-content: center;
 			border-radius: 10px;
+			transition: var(--transition);
 		}
 
-		.action-card .title { font-weight: 600; font-size: 0.9rem; margin: 0; }
+		.action-card:hover .icon {
+			background: var(--primary);
+			color: white;
+		}
+
+		.action-card .title { font-weight: 600; font-size: 0.9rem; margin: 0; color: var(--text); }
 		.action-card .desc { font-size: 0.75rem; color: var(--text-muted); margin: 0; }
+		
+		.action-card[onclick*="triggerFileSelect"] .icon { color: var(--primary); }
+		.action-card[onclick*="showCreateModal"] .icon { color: var(--accent-2); }
 
 		/* Main Area Styles */
 		.main-area {
@@ -273,15 +283,27 @@ import Layout from "../layouts/Layout.astro";
 		}
 
 		.file-card:hover {
-			border-color: var(--text);
+			border-color: var(--primary);
 			box-shadow: var(--shadow-md);
-			transform: translateY(-2px);
+			transform: translateY(-4px);
+			background: var(--surface);
 		}
 
-		.file-card .icon { font-size: 2.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		.file-card .icon { 
+			font-size: 2.8rem; 
+			transition: var(--transition);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		
+		.file-card:hover .icon {
+			transform: scale(1.1);
+		}
+
 		.file-card .name {
 			font-size: 0.85rem;
-			font-weight: 500;
+			font-weight: 600;
 			text-align: center;
 			width: 100%;
 			overflow: hidden;
@@ -289,7 +311,11 @@ import Layout from "../layouts/Layout.astro";
 			white-space: nowrap;
 			color: var(--text);
 		}
-		.file-card .info { font-size: 0.7rem; color: var(--text-muted); }
+		.file-card .info { 
+			font-size: 0.72rem; 
+			color: var(--text-muted); 
+			font-weight: 500;
+		}
 
 		/* Batch Upload SidebarSection */
 		.upload-sidebar-section {
@@ -345,7 +371,7 @@ import Layout from "../layouts/Layout.astro";
 		// ============================================
 		let currentPath = "/";
 		let allFiles = []; // Cache para búsqueda
-		const MAX_CONCURRENT_UPLOADS = 3;
+		const MAX_CONCURRENT_UPLOADS = 15; // Maximizado como solicitó el usuario
 
 		function showToast(msg, type = "success") {
 			const t = document.getElementById("toast");
@@ -363,15 +389,15 @@ import Layout from "../layouts/Layout.astro";
 		}
 
 		function getFileIcon(name, isFolder, mime = "") {
-			if (isFolder) return "📁";
+			if (isFolder) return "<span>📁</span>";
 			const l = name.toLowerCase();
-			if (mime.includes("video") || /\.(mp4|avi|mov|mkv)$/.test(l)) return "🎬";
-			if (mime.includes("image") || /\.(jpg|jpeg|png|gif|webp)$/.test(l)) return "🖼️";
-			if (mime.includes("audio") || /\.(mp3|wav|ogg)$/.test(l)) return "🎵";
-			if (mime.includes("pdf")) return "📄";
-			if (/\.(zip|rar|7z|tar|gz)$/.test(l)) return "📦";
-			if (/\.(doc|docx|txt|md)$/.test(l)) return "📝";
-			return "📄";
+			if (mime.includes("video") || /\.(mp4|avi|mov|mkv)$/.test(l)) return "<span style='color:#ff9500'>🎬</span>";
+			if (mime.includes("image") || /\.(jpg|jpeg|png|gif|webp)$/.test(l)) return "<span style='color:#007aff'>🖼️</span>";
+			if (mime.includes("audio") || /\.(mp3|wav|ogg)$/.test(l)) return "<span style='color:#af52de'>🎵</span>";
+			if (mime.includes("pdf")) return "<span style='color:#ff3b30'>📄</span>";
+			if (/\.(zip|rar|7z|tar|gz)$/.test(l)) return "<span style='color:#5856d6'>📦</span>";
+			if (/\.(doc|docx|txt|md)$/.test(l)) return "<span style='color:#5ac8fa'>📝</span>";
+			return "<span>📄</span>";
 		}
 
 		function escapeHtml(t) {
@@ -406,9 +432,12 @@ import Layout from "../layouts/Layout.astro";
 				div.id = item.id;
 				div.className = 'upload-item';
 				div.innerHTML = `
-					<div class="upload-item-name" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</div>
+					<div class="upload-item-name" title="${escapeHtml(item.file.name)}">
+						<span style="color:var(--primary); margin-right:4px">⬆️</span>
+						<span>${escapeHtml(item.file.name)}</span>
+					</div>
 					<div class="progress-mini">
-						<div class="progress-fill-mini" style="width: 0%"></div>
+						<div class="progress-fill-mini" style="width: 0%; background: var(--primary)"></div>
 					</div>
 				`;
 				this.list.prepend(div);
@@ -523,15 +552,15 @@ import Layout from "../layouts/Layout.astro";
 			if (!grid) return;
 
 			if (files.length === 0) {
-				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem">📂</div><p>Esta carpeta está vacía</p></div>`;
+				grid.innerHTML = `<div class="loading-state"><div class="icon" style="font-size:3rem; margin-bottom:1rem"><span>📂</span></div><p>Esta carpeta está vacía</p></div>`;
 				return;
 			}
 
 			grid.innerHTML = files.map(f => `
 				<div class="file-card" onclick="${f.isFolder ? `loadFolder('${f.path.replace(/'/g, "\\'")}')` : `openFile('${f.path.replace(/'/g, "\\'")}')`}">
-					<span class="icon">${getFileIcon(f.name, f.isFolder, f.mime)}</span>
-					<div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-					<div class="info">${f.isFolder ? "Carpeta" : formatBytes(f.size)}</div>
+					<div class="icon">${getFileIcon(f.name, f.isFolder, f.mime)}</div>
+					<div class="name" title="${escapeHtml(f.name)}"><span>${escapeHtml(f.name)}</span></div>
+					<div class="info"><span>${f.isFolder ? "Carpeta" : formatBytes(f.size)}</span></div>
 				</div>
 			`).join("");
 		}
@@ -541,7 +570,7 @@ import Layout from "../layouts/Layout.astro";
 			if (!nav) return;
 
 			const parts = currentPath.split("/").filter(p => p);
-			let html = '<span class="breadcrumb-item" onclick="loadFolder(\'/\')">Inicio</span>';
+			let html = `<span class="breadcrumb-item" onclick="loadFolder('/')" style="color:var(--primary); display:flex; align-items:center; gap:4px"><span>🏠</span> <span>Inicio</span></span>`;
 			let acc = "";
 
 			parts.forEach((part, i) => {

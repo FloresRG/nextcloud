@@ -18,35 +18,32 @@ const { title } = Astro.props;
         --surface: #fbfcff;
         --surface-2: #f4f5f7;
         --text: #000000;
-        --text-secondary: #606060;
-        --text-muted: #909090;
-        --primary: #000000;
+        --text-secondary: #404040;
+        --text-muted: #808080;
+        --primary: #007aff; /* Added accent blue */
+        --accent-2: #34c759; /* Accent green */
         --border: #eeeeee;
-        --border-hover: #dddddd;
-        --success: #000000;
-        --error: #ff3b30;
-        --sidebar-width: 280px;
+        --border-hover: #e0e0e0;
+        --radius: 14px;
         --header-height: 70px;
-        --radius: 12px;
-        --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-        --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-        --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        --sidebar-width: 300px;
+        --shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
+        --shadow-md: 0 8px 16px rgba(0,0,0,0.06);
+        --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
           --bg: #000000;
-          --surface: #111111;
-          --surface-2: #1a1a1a;
+          --surface: #0a0a0a;
+          --surface-2: #141414;
           --text: #ffffff;
           --text-secondary: #a0a0a0;
-          --text-muted: #707070;
-          --primary: #ffffff;
-          --border: #222222;
-          --border-hover: #333333;
-          --success: #ffffff;
-          --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
-          --shadow-md: 0 10px 15px -3px rgba(0,0,0,0.5);
+          --text-muted: #606060;
+          --primary: #0a84ff;
+          --accent-2: #30d158;
+          --border: #1a1a1a;
+          --border-hover: #2a2a2a;
         }
       }
 
